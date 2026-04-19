@@ -72,12 +72,19 @@ st.markdown("""
   .stChatInput {
     position: fixed !important;
     bottom: 0 !important;
-    left: 22rem !important;
+    left: 0 !important; /* Default for mobile: full width */
     right: 0 !important;
     padding: 12px 24px 16px 24px !important;
     background: white !important;
     z-index: 999 !important;
     border-top: 1px solid #e2e8f0 !important;
+  }
+  
+  /* Only offset the chat input for the sidebar on larger desktop screens */
+  @media (min-width: 768px) {
+    .stChatInput {
+      left: 22rem !important;
+    }
   }
   /* Add bottom padding so last message isn't hidden behind input */
   .main .block-container {
