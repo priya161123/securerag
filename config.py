@@ -9,7 +9,13 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # ── API ────────────────────────────────────────────────────────────────────
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+try:
+    import streamlit as st
+    _st_key = st.secrets.get("OPENAI_API_KEY")
+except Exception:
+    _st_key = None
+
+OPENAI_API_KEY = _st_key or os.getenv("OPENAI_API_KEY", "")
 MODEL_NAME     = "gpt-3.5-turbo"
 MAX_TOKENS     = 1024
 
