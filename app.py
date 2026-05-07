@@ -125,25 +125,7 @@ with st.sidebar:
 
     st.divider()
 
-    # ── File Upload (moved to sidebar) ─────────────────────────────────────
-    st.markdown("#### 📎 Upload Document")
-    st.caption("Index a document into the knowledge base")
-    uploaded_file = st.file_uploader(
-        "Upload (txt, pdf, docx)",
-        type=["txt", "pdf", "docx"],
-        key="sidebar_upload",
-        label_visibility="collapsed",
-    )
-    if uploaded_file and uploaded_file.name not in st.session_state.uploaded_files:
-        with st.spinner(f"Processing {uploaded_file.name}…"):
-            text, ftype = extract_text(uploaded_file.read(), uploaded_file.name)
-        if text.startswith("[ERROR"):
-            st.error(text)
-        else:
-            n = pipe.add_document(uploaded_file.name, text)
-            st.session_state.uploaded_files.add(uploaded_file.name)
-            st.success(f"✅ **{uploaded_file.name}** — {n} chunks indexed")
-
+    # ── File Upload (Moved to Chat Input) ──────────────────────────────────
     if st.button("⚡ Load Sample Knowledge Base", use_container_width=True):
         from demo import SAMPLE_DOCS
         for doc, n in pipe.add_documents(SAMPLE_DOCS).items():
@@ -280,110 +262,161 @@ with tab_chat:
 
     # ── Chat input ────────────────────────────────────────────────────────
     prefill    = st.session_state.pop("prefill", "")
-    user_input = st.chat_input("Ask anything about your documents…")
+    prompt     = st.chat_input("Ask anything about your documents or upload one…", accept_file="multiple", file_type=["txt", "pdf", "docx"])
+    
+    user_input = ""
+    user_files = []
+    
+    if prompt:
+        # Streamlit >= 1.39.0 returns a dict-like object if accept_file is used
+        if isinstance(prompt, str):
+            user_input = prompt
+        else:
+            user_input = getattr(prompt, "text", "") or ""
+            user_files = getattr(prompt, "files", [])
+
     if prefill:
         user_input = prefill
 
     # ── Process ───────────────────────────────────────────────────────────
-    if user_input:
+    if user_files or user_input:
         ts    = datetime.datetime.now().strftime("%H:%M:%S  %d/%m/%Y")
-        logger.info(f"User query: {user_input}")
-
-        with st.chat_message("user"):
-            st.write(user_input)
-            st.markdown(f'<div class="meta-row"><span class="meta-chip">🕐 {ts}</span></div>', unsafe_allow_html=True)
-
-        with st.chat_message("assistant"):
-            progress    = st.empty()
-            full_output = ""
-            word_count  = 0
-            score       = 0
-            reason      = ""
-            classification = "SAFE"
-
-            try:
-                # Step 1 — Guardrail
-                progress.info("🛡️ Step 1/3 — Guardrail evaluating…")
-                gr = pipe.run_guardrail(user_input)
-                progress.empty()
-
-                classification = gr.classification
-                score          = gr.threat_score
-                reason         = gr.reason
-                gr_class       = {"SAFE":"gr-safe","SUSPICIOUS":"gr-sanitized","UNSAFE":"gr-unsafe"}.get(classification,"gr-safe")
-                resp_class     = {"SAFE":"resp-safe","SUSPICIOUS":"resp-sanitized","UNSAFE":"resp-unsafe"}.get(classification,"resp-safe")
-                badge          = {"SAFE":"✅ SAFE","SUSPICIOUS":"⚠️ SUSPICIOUS","UNSAFE":"🚫 BLOCKED"}.get(classification,"")
-                bar_color      = "#22c55e" if score <= 2 else ("#f59e0b" if score <= 5 else "#ef4444")
-
-                st.markdown(
-                    f'<div class="{gr_class}">Guardrail: {badge} &nbsp;|&nbsp; Threat Score: {score}/10'
-                    f'<div class="score-bar-wrap"><div class="score-bar" style="width:{score*10}%;background:{bar_color}"></div></div>'
-                    f'<span style="font-size:0.75rem;font-weight:400;color:#64748b;">{reason[:80]}</span>'
-                    f'</div>', unsafe_allow_html=True,
-                )
-                with st.expander("📋 Full Guardrail Report"):
-                    st.code(gr.report_header, language=None)
-
-                if gr.is_blocked:
-                    full_output = "I'm unable to process that request."
-                    st.markdown(
-                        f'<div class="blocked-box">🚫 Request blocked'
-                        f'<span class="threat-pill">Score {score}/10</span><br>{reason}</div>',
-                        unsafe_allow_html=True,
-                    )
-                    st.session_state.blocked_count += 1
-
-                else:
-                    if gr.is_sanitized:
-                        st.warning("⚠️ Malicious fragment removed — answering clean intent only.")
-                        st.session_state.sanitized_count += 1
-
-                    # Step 2 — Retrieve
-                    progress.info("🔍 Step 2/3 — Retrieving context…")
-                    hits = pipe.get_retrieved_chunks(gr.clean_query)
-                    progress.empty()
-
-                    if hits:
-                        with st.expander(f"📄 Sources ({len(hits)} chunk(s))"):
-                            for i, (doc_name, chunk_id, sim, text) in enumerate(hits, 1):
-                                st.markdown(f"**→ {doc_name}, chunk {chunk_id}** &nbsp; similarity: `{sim:.3f}`")
-                                st.text(text[:280] + ("…" if len(text) > 280 else ""))
-                                if i < len(hits): st.divider()
+        
+        # 1. Process files first
+        for uploaded_file in user_files:
+            if uploaded_file.name not in st.session_state.uploaded_files:
+                logger.info(f"User uploaded file: {uploaded_file.name}")
+                with st.chat_message("user"):
+                    st.write(f"📎 Uploaded file: {uploaded_file.name}")
+                    st.markdown(f'<div class="meta-row"><span class="meta-chip">🕐 {ts}</span></div>', unsafe_allow_html=True)
+                
+                with st.chat_message("assistant"):
+                    with st.spinner(f"Processing {uploaded_file.name}…"):
+                        text, ftype = extract_text(uploaded_file.read(), uploaded_file.name)
+                    
+                    if text.startswith("[ERROR"):
+                        st.error(text)
+                        full_output = text
+                        classification = "SAFE"
+                        score = 0
+                        reason = "File upload error"
                     else:
-                        st.markdown(
-                            '<div class="quarantine-notice">⚠️ No chunks retrieved — '
-                            'either no relevant content found, or chunks were quarantined '
-                            'due to <b>indirect injection patterns</b>. '
-                            'Answer uses general knowledge only.</div>',
-                            unsafe_allow_html=True,
-                        )
+                        n = pipe.add_document(uploaded_file.name, text)
+                        st.session_state.uploaded_files.add(uploaded_file.name)
+                        full_output = f"✅ **{uploaded_file.name}** — {n} chunks indexed successfully."
+                        st.markdown(f'<div class="resp-safe">{full_output}</div>', unsafe_allow_html=True)
+                        classification = "SAFE"
+                        score = 0
+                        reason = "File indexed"
 
-                    # Step 3 — Generate
-                    progress.info("🤖 Step 3/3 — Generating response…")
-                    time.sleep(0.1)
-                    progress.empty()
-
-                    streamed   = st.write_stream(pipe.stream_answer(gr.clean_query, gr.is_sanitized))
-                    full_output = streamed
-                    word_count  = len(streamed.split())
+                    word_count = len(full_output.split())
                     st.markdown(
                         f'<div class="meta-row"><span class="meta-chip">📝 ~{word_count} words</span></div>',
                         unsafe_allow_html=True,
                     )
-                    logger.info(f"Response: {word_count} words | class={classification} | score={score}")
+                st.session_state.chat_history.append(
+                    (f"📎 Uploaded file: {uploaded_file.name}", full_output, classification, ts, word_count, reason, score)
+                )
 
-            except Exception as e:
-                progress.empty()
-                st.error(f"❌ API Error: {e}")
-                full_output    = f"Error: {e}"
+        # 2. Process text input if present
+        if user_input:
+            logger.info(f"User query: {user_input}")
+
+            with st.chat_message("user"):
+                st.write(user_input)
+                st.markdown(f'<div class="meta-row"><span class="meta-chip">🕐 {ts}</span></div>', unsafe_allow_html=True)
+
+            with st.chat_message("assistant"):
+                progress    = st.empty()
+                full_output = ""
+                word_count  = 0
+                score       = 0
+                reason      = ""
                 classification = "SAFE"
-                logger.error(f"Error: {e}")
 
-            st.session_state.chat_history.append(
-                (user_input, full_output, classification, ts, word_count, reason, score)
-            )
-            st.session_state.score_history.append(score)
-            st.session_state.query_count += 1
+                try:
+                    # Step 1 — Guardrail
+                    progress.info("🛡️ Step 1/3 — Guardrail evaluating…")
+                    gr = pipe.run_guardrail(user_input)
+                    progress.empty()
+
+                    classification = gr.classification
+                    score          = gr.threat_score
+                    reason         = gr.reason
+                    gr_class       = {"SAFE":"gr-safe","SUSPICIOUS":"gr-sanitized","UNSAFE":"gr-unsafe"}.get(classification,"gr-safe")
+                    resp_class     = {"SAFE":"resp-safe","SUSPICIOUS":"resp-sanitized","UNSAFE":"resp-unsafe"}.get(classification,"resp-safe")
+                    badge          = {"SAFE":"✅ SAFE","SUSPICIOUS":"⚠️ SUSPICIOUS","UNSAFE":"🚫 BLOCKED"}.get(classification,"")
+                    bar_color      = "#22c55e" if score <= 2 else ("#f59e0b" if score <= 5 else "#ef4444")
+
+                    st.markdown(
+                        f'<div class="{gr_class}">Guardrail: {badge} &nbsp;|&nbsp; Threat Score: {score}/10'
+                        f'<div class="score-bar-wrap"><div class="score-bar" style="width:{score*10}%;background:{bar_color}"></div></div>'
+                        f'<span style="font-size:0.75rem;font-weight:400;color:#64748b;">{reason[:80]}</span>'
+                        f'</div>', unsafe_allow_html=True,
+                    )
+                    with st.expander("📋 Full Guardrail Report"):
+                        st.code(gr.report_header, language=None)
+
+                    if gr.is_blocked:
+                        full_output = "I'm unable to process that request."
+                        st.markdown(
+                            f'<div class="blocked-box">🚫 Request blocked'
+                            f'<span class="threat-pill">Score {score}/10</span><br>{reason}</div>',
+                            unsafe_allow_html=True,
+                        )
+                        st.session_state.blocked_count += 1
+
+                    else:
+                        if gr.is_sanitized:
+                            st.warning("⚠️ Malicious fragment removed — answering clean intent only.")
+                            st.session_state.sanitized_count += 1
+
+                        # Step 2 — Retrieve
+                        progress.info("🔍 Step 2/3 — Retrieving context…")
+                        hits = pipe.get_retrieved_chunks(gr.clean_query)
+                        progress.empty()
+
+                        if hits:
+                            with st.expander(f"📄 Sources ({len(hits)} chunk(s))"):
+                                for i, (doc_name, chunk_id, sim, text) in enumerate(hits, 1):
+                                    st.markdown(f"**→ {doc_name}, chunk {chunk_id}** &nbsp; similarity: `{sim:.3f}`")
+                                    st.text(text[:280] + ("…" if len(text) > 280 else ""))
+                                    if i < len(hits): st.divider()
+                        else:
+                            st.markdown(
+                                '<div class="quarantine-notice">⚠️ No chunks retrieved — '
+                                'either no relevant content found, or chunks were quarantined '
+                                'due to <b>indirect injection patterns</b>. '
+                                'Answer uses general knowledge only.</div>',
+                                unsafe_allow_html=True,
+                            )
+
+                        # Step 3 — Generate
+                        progress.info("🤖 Step 3/3 — Generating response…")
+                        time.sleep(0.1)
+                        progress.empty()
+
+                        streamed   = st.write_stream(pipe.stream_answer(gr.clean_query, gr.is_sanitized))
+                        full_output = streamed
+                        word_count  = len(streamed.split())
+                        st.markdown(
+                            f'<div class="meta-row"><span class="meta-chip">📝 ~{word_count} words</span></div>',
+                            unsafe_allow_html=True,
+                        )
+                        logger.info(f"Response: {word_count} words | class={classification} | score={score}")
+
+                except Exception as e:
+                    progress.empty()
+                    st.error(f"❌ API Error: {e}")
+                    full_output    = f"Error: {e}"
+                    classification = "SAFE"
+                    logger.error(f"Error: {e}")
+
+                st.session_state.chat_history.append(
+                    (user_input, full_output, classification, ts, word_count, reason, score)
+                )
+                st.session_state.score_history.append(score)
+                st.session_state.query_count += 1
 
 
 # ════════════════════════════════════════════════════════════════════════════
