@@ -426,98 +426,36 @@ with tab_arch:
     st.markdown("## 🏗️ System Architecture")
     st.caption("Two-agent pipeline with dual-layer injection defense")
 
-    components.html("""
-    <style>
-      body{margin:0;font-family:'Inter',system-ui,sans-serif;background:#f8fafc;}
-    </style>
-    <svg viewBox="0 0 880 580" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:880px;display:block;margin:auto;">
-      <rect width="880" height="580" rx="14" fill="#f8fafc" stroke="#e2e8f0" stroke-width="1"/>
-      <text x="440" y="32" text-anchor="middle" font-size="15" font-weight="700" fill="#0f172a">SecureRAG — System Architecture</text>
-
-      <!-- User -->
-      <rect x="20" y="230" width="110" height="58" rx="10" fill="#1e3a5f" stroke="#3b82f6" stroke-width="2"/>
-      <text x="75" y="254" text-anchor="middle" font-size="13" fill="white" font-weight="600">User</text>
-      <text x="75" y="273" text-anchor="middle" font-size="10" fill="#93c5fd">Input query</text>
-
-      <line x1="130" y1="259" x2="188" y2="259" stroke="#64748b" stroke-width="1.8" marker-end="url(#arr)"/>
-      <text x="159" y="251" text-anchor="middle" font-size="9" fill="#64748b">query</text>
-
-      <!-- Guardrail box -->
-      <rect x="188" y="165" width="172" height="188" rx="12" fill="#fef2f2" stroke="#ef4444" stroke-width="2"/>
-      <text x="274" y="193" text-anchor="middle" font-size="13" fill="#991b1b" font-weight="700">Guardrail Agent</text>
-      <line x1="200" y1="204" x2="348" y2="204" stroke="#fca5a5" stroke-width="1"/>
-      <text x="274" y="221" text-anchor="middle" font-size="9.5" fill="#7f1d1d">Layer 1 — Unicode regex</text>
-      <text x="274" y="237" text-anchor="middle" font-size="9.5" fill="#7f1d1d">Layer 2 — Few-shot LLM</text>
-      <text x="274" y="253" text-anchor="middle" font-size="9.5" fill="#7f1d1d">Regex fallback on LLM fail</text>
-      <text x="274" y="273" text-anchor="middle" font-size="8.5" fill="#dc2626">BLOCK / SANITIZE / PASS</text>
-      <rect x="210" y="284" width="128" height="6" rx="3" fill="#fee2e2"/>
-      <rect x="210" y="284" width="80"  height="6" rx="3" fill="#ef4444"/>
-      <text x="274" y="302" text-anchor="middle" font-size="8" fill="#b91c1c">threat score 0–10</text>
-      <text x="274" y="320" text-anchor="middle" font-size="8" fill="#b91c1c">Unicode NFKC normalisation</text>
-      <text x="274" y="336" text-anchor="middle" font-size="8" fill="#b91c1c">+ zero-width char strip</text>
-
-      <line x1="274" y1="353" x2="274" y2="420" stroke="#ef4444" stroke-width="1.5" stroke-dasharray="5,3" marker-end="url(#arrRed)"/>
-      <rect x="210" y="420" width="128" height="34" rx="8" fill="#fff1f2" stroke="#fda4af" stroke-width="1.5"/>
-      <text x="274" y="441" text-anchor="middle" font-size="10" fill="#be123c" font-weight="600">BLOCKED</text>
-      <text x="274" y="454" text-anchor="middle" font-size="8.5" fill="#9f1239">reason shown to user</text>
-
-      <line x1="360" y1="259" x2="418" y2="259" stroke="#22c55e" stroke-width="2" marker-end="url(#arrGreen)"/>
-      <text x="389" y="251" text-anchor="middle" font-size="9" fill="#15803d">SAFE/SANITIZED</text>
-
-      <!-- Vector Store box -->
-      <rect x="418" y="350" width="172" height="90" rx="10" fill="#f5f3ff" stroke="#8b5cf6" stroke-width="2"/>
-      <text x="504" y="378" text-anchor="middle" font-size="12" fill="#5b21b6" font-weight="700">FAISS Vector DB</text>
-      <text x="504" y="396" text-anchor="middle" font-size="9" fill="#6d28d9">Sentence Transformers</text>
-      <text x="504" y="412" text-anchor="middle" font-size="9" fill="#6d28d9">Cosine similarity search</text>
-      <rect x="428" y="418" width="152" height="16" rx="4" fill="#ede9fe" stroke="#a78bfa" stroke-width="1"/>
-      <text x="504" y="430" text-anchor="middle" font-size="8" fill="#6d28d9" font-weight="600">chunk injection scan</text>
-
-      <!-- Main Agent box -->
-      <rect x="418" y="165" width="172" height="168" rx="12" fill="#f0fdf4" stroke="#22c55e" stroke-width="2"/>
-      <text x="504" y="193" text-anchor="middle" font-size="13" fill="#14532d" font-weight="700">Main Agent</text>
-      <line x1="430" y1="203" x2="578" y2="203" stroke="#bbf7d0" stroke-width="1"/>
-      <text x="504" y="220" text-anchor="middle" font-size="9" fill="#166534">System prompt (instruction tuning)</text>
-      <text x="504" y="235" text-anchor="middle" font-size="9" fill="#166534">Multi-turn context (8 turns)</text>
-      <text x="504" y="250" text-anchor="middle" font-size="9" fill="#166534">Token-aware history trimming</text>
-      <text x="504" y="265" text-anchor="middle" font-size="9" fill="#166534">Blocked turns excluded</text>
-      <text x="504" y="280" text-anchor="middle" font-size="9" fill="#166534">RAG context injection</text>
-      <text x="504" y="296" text-anchor="middle" font-size="9" fill="#166534">Structured reasoning (silent)</text>
-      <text x="504" y="312" text-anchor="middle" font-size="9" fill="#166534">Streaming output</text>
-
-      <line x1="504" y1="333" x2="504" y2="350" stroke="#8b5cf6" stroke-width="1.5" marker-end="url(#arrPurple)"/>
-      <text x="520" y="345" font-size="8.5" fill="#7c3aed">retrieve</text>
-      <line x1="590" y1="395" x2="635" y2="330" stroke="#8b5cf6" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arrPurple)"/>
-      <text x="625" y="366" font-size="8" fill="#7c3aed">clean chunks</text>
-
-      <!-- Response box -->
-      <rect x="650" y="185" width="130" height="86" rx="10" fill="#f0f9ff" stroke="#38bdf8" stroke-width="2"/>
-      <text x="715" y="211" text-anchor="middle" font-size="12" fill="#0c4a6e" font-weight="700">Response</text>
-      <text x="715" y="227" text-anchor="middle" font-size="9" fill="#0369a1">Streaming tokens</text>
-      <text x="715" y="242" text-anchor="middle" font-size="9" fill="#0369a1">Guardrail badge + score</text>
-      <text x="715" y="257" text-anchor="middle" font-size="9" fill="#0369a1">Sources cited</text>
-      <line x1="590" y1="249" x2="650" y2="249" stroke="#0ea5e9" stroke-width="2" marker-end="url(#arrBlue)"/>
-
-      <!-- Logger -->
-      <rect x="650" y="370" width="130" height="52" rx="8" fill="#fefce8" stroke="#fde047" stroke-width="1.5"/>
-      <text x="715" y="393" text-anchor="middle" font-size="11" fill="#713f12" font-weight="600">Logger</text>
-      <text x="715" y="408" text-anchor="middle" font-size="8.5" fill="#854d0e">Every event → securerag.log</text>
-
-      <path d="M715 271 Q715 490 75 490 Q75 295 75 288" stroke="#64748b" stroke-width="1.5" fill="none" stroke-dasharray="5,3" marker-end="url(#arr)"/>
-      <text x="390" y="510" text-anchor="middle" font-size="9" fill="#64748b">streamed response shown to user</text>
-
-      <rect x="418" y="440" width="172" height="30" rx="6" fill="#fef3c7" stroke="#fcd34d" stroke-width="1.2"/>
-      <text x="504" y="455" text-anchor="middle" font-size="8.5" fill="#92400e" font-weight="600">Indirect injection defense:</text>
-      <text x="504" y="465" text-anchor="middle" font-size="8" fill="#78350f">poisoned chunks quarantined here</text>
-
-      <defs>
-        <marker id="arr"        markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3 z" fill="#64748b"/></marker>
-        <marker id="arrGreen"   markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3 z" fill="#22c55e"/></marker>
-        <marker id="arrRed"     markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3 z" fill="#ef4444"/></marker>
-        <marker id="arrPurple"  markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3 z" fill="#8b5cf6"/></marker>
-        <marker id="arrBlue"    markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3 z" fill="#0ea5e9"/></marker>
-      </defs>
-    </svg>
-    """, height=600)
+    st.code("""
+       [ User Query ]
+             │
+             ▼
+ ┌───────────────────────────┐
+ │     GUARDRAIL AGENT       │
+ │                           │
+ │ 1. Unicode Regex Filter   │
+ │ 2. Few-shot LLM Scorer    │
+ │                           │
+ │ => Threat Score (0-10)    │
+ └──────┬─────────────┬──────┘
+        │             │
+    [UNSAFE]   [SAFE / SANITIZED]
+        │             │
+        ▼             ▼
+  🚫 BLOCKED   ┌───────────────────────────┐
+               │        MAIN AGENT         │
+               │                           │
+               │ • Context Trimming        │
+               │ • RAG Context Injection   │
+               │ • Streaming Generation    │
+               └──────┬─────────────▲──────┘
+                      │ Retrieve    │ Clean
+                      ▼             │ Chunks
+               [( FAISS VECTOR DATABASE )]
+                      │
+                      ▼
+             💬 STREAMING RESPONSE
+    """, language="text")
 
     st.divider()
     st.markdown("### Assignment Coverage")
